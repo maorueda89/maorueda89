@@ -1,0 +1,178 @@
+#Zona de importacion de librerias 
+
+import pandas as pd
+import numpy as np
+import os
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
+from sklearn.linear_model import RidgeClassifier
+
+#______________________________________________________________________________________________________________________________________________________________________________
+# Definición de funciones de trabajo
+#______________________________________________________________________________________________________________________________________________________________________________
+def buscador_ruta(ruta):
+    contenido=os.listdir(ruta)
+    contenido=os.listdir(ruta)
+    contenido=pd.DataFrame(contenido)
+    contenido.columns=['NOMBRE DEL DOCUMENTO']
+    return contenido
+
+    
+def selector_archivo (contenido):
+    validador_filas=False
+    dato_elegido=''
+  
+    while validador_filas == False:
+        print('POR FAVOR SELECCIONE AHORA EL NUMERO DE DOCUMENTO QUE DESEA INCLUIR')
+
+        documento=int(input())
+
+        # verificacion de numero de documento dentro del rango
+
+        filas_documentos=contenido.shape[0]-1
+
+        if (documento < 0) or (documento > filas_documentos):
+            
+            print("POR FAVOR ELIJA UN NUMERO DE ARCHIVO CORRECTO")
+            validador_filas=False 
+        else:
+            dato_elegido=contenido.iloc[documento,0]
+            print('EL DOCUMENTO QUE USTED ELIGIO ES: ',dato_elegido )
+            validador_filas=True
+
+    return dato_elegido
+
+
+#______________________________________________________________________________________________________________________________________________________________________________
+
+#Generación del Modelo con la matriz de entrenamiento
+#_____________________________________________________________________________________________________________________________
+
+print('SE INICIA LA GENERACIÓN DEL MODELO CON LA MATRIZ DE ENTRENAMIENTO')
+
+#cargue de datos
+datos=pd.read_excel('MATRIZ_ENTRENAMIENTO.xlsx',sheet_name='ENTRENAMIENTO')
+
+#declaracion de variables: el documento debe contener una columna nombrada como 'RELATO' y otra como 'FENoMENO_C'
+
+X_train, X_test, y_train, y_test = train_test_split(datos.RELATO,datos.FENoMENO_C,test_size=0.2,random_state=2551,shuffle=True)
+
+#ajuste del modelo del modelo
+
+X_CountVectorizer=CountVectorizer()
+X_train_counts=X_CountVectorizer.fit_transform(X_train)
+X_TfidTransformer=TfidfTransformer()
+X_train_tfidf=X_TfidTransformer.fit_transform(X_train_counts)
+
+#creacion del modelo
+
+model=RidgeClassifier()
+model.fit(X_train_tfidf,y_train)
+
+#precisión del modelo
+
+presicion=model.score(X_CountVectorizer.transform(X_test),y_test)
+
+
+#____________________________________________________________________________________________________________________________________________
+#SELECCIÓN DEL ARCHIVO A CLASIFICAR
+#____________________________________________________________________________________________________________________________________________
+
+#Buscar el contenido de la ruta
+
+print('________________________________________________________________________________________________________________________________________')
+print ('INGRESE LA RUTA DE SU ENTORNO DE TRABAJO')
+
+ruta=str(input())
+carpeta=buscador_ruta(ruta)
+carpeta['EXTENSION']=''
+
+for i in carpeta.index:
+    VALOR=carpeta.loc[i,'NOMBRE DEL DOCUMENTO']
+    VALOR=VALOR[-5:]
+    carpeta.loc[i,'EXTENSION']=VALOR
+      
+
+  
+carpeta=carpeta.loc[carpeta['EXTENSION']=='.xlsx']
+carpeta=carpeta.reset_index(drop=True)
+
+print('___________________________________________________________________________________________________________________________________________')
+print(carpeta)
+print('___________________________________________________________________________________________________________________________________________')
+
+#______________________________________________________________________________________________________________________________________________________
+#SELECCION DEL ARCHIVO A VISUALIZAR
+
+archivo_seleccionado=selector_archivo(carpeta)
+
+ruta= ruta +'/'+ archivo_seleccionado
+
+print('________________________________________________________________________________________________________________________________________')
+print('LA RUTA ELEGIDA ES: ', ruta)
+print('________________________________________________________________________________________________________________________________________')
+
+#__________________________________________________________________________________________________________________________________________________________
+#exploracion y seleccion de la hoja de excel a utilizar
+
+datos_usados=pd.read_excel(ruta,sheet_name=None)
+hojas=datos_usados.keys()
+hojas=pd.DataFrame(hojas)
+hojas.columns=['HOJAS_DOCUMENTOS']
+
+print('__________________________________________________________________________________________________________________________________________________')
+
+print(hojas)
+
+hoja_elegida=selector_archivo(hojas)
+
+#________________________________________________________________________________________________________________________________________________________________
+# Generador de dataframe elejido
+
+#datos_usados=pd.read_excel(ruta,sheet_name=hoja_elegida)
+#print(datos_usados)
+
+#_______________________________________________________________________________________________________________________________________________________________
+#PROCESO DE CLASIFICACION DEL ARCHIVO
+#_______________________________________________________________________________________________________________________________________________________________
+# limpieza del dato, la matriz debe contener una columna llamada 'RELATO'
+
+clasificacion =pd.read_excel(ruta,sheet_name= hoja_elegida)
+clasificacion=clasificacion.dropna(subset='RELATO')
+clasificacion=clasificacion.reset_index()
+
+clasificacion['fenomeno_2']=''
+
+for i in clasificacion.index:
+  
+  texto= clasificacion['RELATO'].iloc[i]
+  
+  texto=[texto]
+  
+  text_counts=X_CountVectorizer.transform(texto)
+
+  #prediccion del modelo
+
+  prediccion=model.predict(text_counts)
+
+  clasificacion.loc[i,'fenomeno_2']=prediccion
+
+#limpieza de pestaña de clasificacion 
+
+clasificacion['fenomeno_2']=clasificacion['fenomeno_2'].astype(str).replace('[[]','',regex=True)
+clasificacion['fenomeno_2']=clasificacion['fenomeno_2'].astype(str).replace('[]]','',regex=True)
+clasificacion['fenomeno_2']=clasificacion['fenomeno_2'].astype(str).replace({"'":''},regex=True)
+
+#______________________________________________________________________________________________________________________________________________
+print('_________________________________________________________________________________________________')
+
+print('Su clasificación es: ')
+
+print(clasificacion)
+
+print('La presición del modelo es: ', presicion*100, '%')
+
+
+clasificacion.to_excel('resultado_clasificado_final.xlsx')
+
+print('FINNNN')
